@@ -1,0 +1,514 @@
+#!/usr/bin/env python3
+"""nz3xt – creates graphics suitable for the nzxt z3 pumheads. This is a experimental script.
+Usage:
+  nz3xt single     <primary_color> <secondary_color> <text_color> <name> <value> <unit> <filename>
+  nz3xt double     <primary_color> <secondary_color> <primary_name> <primary_value> <primary_unit> <secondary_name> <secondary_value>  <secondary_unit> <filename>
+  nz3xt taichi     <primary_color> <secondary_color> <duration> <filename>
+  nz3xt sweep      <primary_color> <duration> <filename>
+  nz3xt rainbow    <duration> <filename>
+  nz3xt spectrum   <duration> <filename>
+  nz3xt colorwheel <primary_color> <secondary_color> <quaternary_color> <quinary_color> <duration> <filename>
+  nz3xt -h | --help
+  nz3xt --version
+  
+Options:
+  --version               Display the version number
+  --help                  Show this message
+"""
+# Examples
+# ./nz3xt single     "#5200ac" "#7d0081" "#ffffff" CPU 39 ° examples/single01.gif
+# ./nz3xt single     "#5200ac" "#7d0081" "#00aae4" CPU 44 % examples/single02.gif
+# ./nz3xt double     "#5200ac" "#7d0081" CPU 25 ° GPU 28 ° examples/double01.gif
+# ./nz3xt double     "#00aae4" "#ffa500" TEMP 23 ° LOAD 87 % examples/double02.gif
+# ./nz3xt taichi     "#00aae4" "#ffa500" 0.05  examples/taichi01.gif
+# ./nz3xt sweep      "#00aae4" 0.05 examples/sweep01.gif
+# ./nz3xt rainbow    0.05 examples/rainbow01.gif
+# ./nz3xt spectrum   0.05 examples/spectrum01.gif
+# ./nz3xt colorwheel "#00aae4" "#ffa500" "#5200ac" "#7d0081" 0.05 examples/colorwheel01.gif
+#
+
+import sys
+import math
+import cairo
+import webcolors
+import imageio
+import numpy
+from PIL import Image
+from docopt import docopt
+
+WIDTH, HEIGHT = 320, 320
+GAUGE_WIDTH = 32
+GAUGE_MIN, GAUGE_MAX = 0, 99
+
+def nz_single(primary_color, secondary_color, text_color, name, value, unit):
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, WIDTH, HEIGHT)
+    ctx = cairo.Context(surface)
+    # Background
+    ctx.rectangle(0, 0, WIDTH, HEIGHT)
+    ctx.set_source_rgb(0.0, 0.0, 0.0)
+    ctx.fill()
+    # Stroke settings
+    ctx.set_line_width(GAUGE_WIDTH)
+    ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+    # Calculate angle of gauge needle indicator and such..
+    gauge_val = int(value, base=10)
+    gauge_val = min(gauge_val, GAUGE_MAX);
+    gauge_val = max(gauge_val, GAUGE_MIN)
+    gauge_angle = (1.5*math.pi) * gauge_val/100
+    # Gauge gradient background
+    pattern = cairo.LinearGradient(0, HEIGHT/2, WIDTH, HEIGHT/2)
+    #pattern.add_color_stop_rgb(0, 0.3252, 0, 0.6748) 
+    #pattern.add_color_stop_rgb(1, 0.4908, 0, 0.5092)
+    pattern.add_color_stop_rgb(0, primary_color[0],   primary_color[1],   primary_color[2]) 
+    pattern.add_color_stop_rgb(1, secondary_color[0], secondary_color[1], secondary_color[2])
+    ctx.set_source(pattern)
+    # Gauge before needle indicator
+    if gauge_val >= 7:
+        ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, math.pi*3/4, math.pi*3/4 + gauge_angle-0.30)
+        ctx.stroke()
+    # Gauge needle indicator
+    ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, math.pi*3/4 + gauge_angle, math.pi*3/4 + gauge_angle)
+    ctx.stroke()
+    # Gauge after needle indicator
+    if gauge_val <= 93:
+        ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, math.pi*3/4 + gauge_angle+0.30, 2*math.pi+math.pi*1/4)
+        ctx.stroke()
+    # NZXT logo
+    logo = cairo.ImageSurface.create_from_png("NZXT-sm.png")
+    ctx.save()
+    ctx.translate(WIDTH/2-logo.get_width()/2, HEIGHT/3-logo.get_height()/1.25)
+    ctx.set_source_surface(logo, 0, 0)
+    ctx.paint()
+    ctx.restore()
+    # Value
+    ctx.set_source_rgb(1, 1, 1)
+    ctx.set_font_size(98)
+    ctx.select_font_face("Helvetica", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+    (txt_x, txt_y, txt_width, txt_height, txt_dx, txt_dy) = ctx.text_extents(str(gauge_val))
+    ctx.move_to(WIDTH/2 - txt_width/2, HEIGHT/2 + txt_height/2)
+    ctx.show_text(str(gauge_val))
+    # Unit
+    if unit != '':
+        #ctx.set_source_rgb(1, 1, 1)
+        ctx.set_font_size(68)
+        #ctx.select_font_face("Helvetica", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        if unit == "°":
+            (tmp_x, tmp_y, tmp_width, tmp_height, tmp_dx, tmp_dy) = ctx.text_extents(unit)
+            ctx.move_to(WIDTH/2 +txt_width/2, HEIGHT/2 +tmp_height/2)
+            ctx.show_text(" "+unit)
+        if unit == "%":
+            ctx.set_font_size(34)
+            (tmp_x, tmp_y, tmp_width, tmp_height, tmp_dx, tmp_dy) = ctx.text_extents(unit)
+            ctx.move_to(WIDTH/2 +txt_width/2 + 3, HEIGHT/2 + txt_height/2)
+            ctx.show_text(""+unit)
+    # Name
+    ctx.set_source_rgb(text_color[0],   text_color[1],   text_color[2])
+    ctx.set_font_size(32)
+    #ctx.select_font_face("Helvetica", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+    (txt_x, txt_y, txt_width, txt_height, txt_dx, txt_dy) = ctx.text_extents(name)
+    ctx.move_to(WIDTH/2 - txt_width/2, 2/3*HEIGHT + txt_height)
+    ctx.show_text(name)
+    # return the drawn surface
+    return surface
+
+def nz_double(primary_color, secondary_color, primary_name, primary_value, primary_unit, secondary_name, secondary_value, secondary_unit):    
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, WIDTH, HEIGHT)
+    ctx = cairo.Context(surface)
+    # Background
+    ctx.rectangle(0, 0, WIDTH, HEIGHT)
+    ctx.set_source_rgb(0, 0, 0)
+    ctx.fill()
+    # Calculate angle of gauge needle indicator and such..
+    gauge_eps = 0.125
+    # Left gauge
+    gauge1_val = int(primary_value, base=10)
+    gauge1_val = min(gauge1_val, GAUGE_MAX);
+    gauge1_val = max(gauge1_val, GAUGE_MIN)
+    gauge1_angle = (1/2*math.pi) * gauge1_val/100
+    gauge1_angle_start = math.pi
+    # Right gauge
+    gauge2_val = int(secondary_value, base=10)
+    gauge2_val = min(gauge2_val, GAUGE_MAX);
+    gauge2_val = max(gauge2_val, GAUGE_MIN)
+    gauge2_angle = (1/2*math.pi) * gauge2_val/100
+    gauge2_angle_start = 0 #2*math.pi
+    # Gauge stroke settings
+    ctx.set_line_width(GAUGE_WIDTH)
+    ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+    # Left gauge
+    #ctx.set_source_rgb(0.3252, 0, 0.6748)
+    ctx.set_source_rgb(primary_color[0], primary_color[1], primary_color[2])
+    if (gauge1_angle_start-gauge1_angle > math.pi/2 +gauge_eps):
+        ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, gauge1_angle_start-gauge1_angle, gauge1_angle_start+gauge1_angle)
+    else:
+        ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, math.pi/2 +gauge_eps, 3*math.pi/2 -gauge_eps)
+    ctx.stroke()
+
+    # Right gauge
+    #ctx.set_source_rgb(0.4908, 0, 0.5092)
+    ctx.set_source_rgb(secondary_color[0], secondary_color[1], secondary_color[2])
+    if (gauge2_angle_start+gauge2_angle < math.pi/2 -gauge_eps):
+        ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, gauge2_angle_start-gauge2_angle, gauge2_angle_start+gauge2_angle)
+    else:
+        ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, 3*math.pi/2 +gauge_eps, math.pi/2 -gauge_eps)
+        print("max")
+    ctx.stroke() 
+    # NZXT logo
+    logo = cairo.ImageSurface.create_from_png("NZXT-sm.png")
+    ctx.save()
+    ctx.translate(WIDTH/2-logo.get_width()/2, HEIGHT/3-logo.get_height()/1.25)
+    ctx.set_source_surface(logo, 0, 0)
+    ctx.paint()
+    ctx.restore()
+    # 1st Value
+    ctx.set_source_rgb(1, 1, 1)
+    ctx.set_font_size(54)
+    ctx.select_font_face("Helvetica", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+    (txt_x, txt_y, txt_width, txt_height, txt_dx, txt_dy) = ctx.text_extents(primary_value)
+    ctx.move_to(WIDTH/4, HEIGHT/2)
+    ctx.show_text(primary_value) #
+    # 1st Unit
+    if primary_unit != '':
+        ctx.set_source_rgb(1, 1, 1)
+        ctx.set_font_size(28)
+        #ctx.select_font_face("Helvetica", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        if primary_unit == "°":
+            ctx.move_to(WIDTH/4 +txt_width, HEIGHT/2 -txt_height/2)
+            ctx.show_text(" "+primary_unit) #
+        if primary_unit == "%":
+            ctx.set_font_size(18)
+            (tmp_x, tmp_y, tmp_width, tmp_height, tmp_dx, tmp_dy) = ctx.text_extents(primary_unit)
+            ctx.move_to(WIDTH/4 +txt_width, HEIGHT/2  )
+            ctx.show_text(""+primary_unit) #
+    # 1st Name
+    x_center = WIDTH/4 + txt_width/2
+    y_center = HEIGHT/2 + txt_height
+    #ctx.set_source_rgb(0.3252, 0, 0.6748)
+    ctx.set_source_rgb(primary_color[0],   primary_color[1],   primary_color[2])
+    ctx.set_font_size(32)
+    #ctx.select_font_face("Helvetica", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+    (txt_x, txt_y, txt_width, txt_height, txt_dx, txt_dy) = ctx.text_extents(primary_name)
+    ctx.move_to(x_center-txt_width/2, y_center)
+    ctx.show_text(primary_name) # 
+    # 2nd Value
+    ctx.set_source_rgb(1, 1, 1)
+    ctx.set_font_size(54)
+    #ctx.select_font_face("Helvetica", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+    (txt_x, txt_y, txt_width, txt_height, txt_dx, txt_dy) = ctx.text_extents(secondary_value)
+    ctx.move_to(WIDTH-WIDTH/4-txt_width, HEIGHT/2)
+    ctx.show_text(secondary_value) #
+    # 2nd Unit
+    if secondary_unit != "":
+        ctx.set_source_rgb(1, 1, 1)
+        ctx.set_font_size(28)
+        #ctx.select_font_face("Helvetica", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        if secondary_unit == "°":
+            ctx.move_to(WIDTH-WIDTH/4 ,HEIGHT/2 -txt_height/2)
+            ctx.show_text(secondary_unit)
+        if secondary_unit == "%":
+            ctx.set_font_size(18)
+            (tmp_x, tmp_y, tmp_width, tmp_height, tmp_dx, tmp_dy) = ctx.text_extents(secondary_unit)
+            ctx.move_to(WIDTH-WIDTH/4, HEIGHT/2)
+            ctx.show_text(" "+secondary_unit)
+    # 2nd Name
+    x_center = WIDTH-WIDTH/4 - txt_width/2
+    y_center = HEIGHT/2 + txt_height
+    ctx.set_source_rgb(0.4908, 0, 0.5092)
+    ctx.set_source_rgb(secondary_color[0],   secondary_color[1],   secondary_color[2])
+    ctx.set_font_size(32)
+    #ctx.select_font_face("Helvetica", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+    (txt_x, txt_y, txt_width, txt_height, txt_dx, txt_dy) = ctx.text_extents(secondary_name)
+    ctx.move_to(x_center-txt_width/2, y_center)
+    ctx.show_text(secondary_name)
+    # return the drawn surface
+    return surface
+    
+def nz_sweep(primary_color, rotation):
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, WIDTH, HEIGHT)
+    ctx = cairo.Context(surface)
+    # Background
+    ctx.rectangle(0, 0, WIDTH, HEIGHT)
+    ctx.set_source_rgb(0, 0, 0)
+    ctx.fill()
+    # Stroke settings
+    ctx.set_line_width(GAUGE_WIDTH)
+    ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+    # Add a Coons patch
+    rotation = rotation%360 #int(rotation, base=10) % 360
+    ctx.save()
+    ctx.translate(WIDTH/2, HEIGHT/2)
+    ctx.rotate(-rotation*math.pi/180.0)
+    ctx.translate(-WIDTH/2, -HEIGHT/2)
+    pattern = cairo.MeshPattern()
+    # TOP RIGHT
+    dx = WIDTH/2
+    dy = HEIGHT/2
+    r = 160
+    S = (0, 0)
+    CP1 = (0.552 * r, r)
+    CP2 = (r, 0.552 * r)
+    E = (0, 0) 
+    pattern.begin_patch()
+    pattern.move_to(dx+S[0], dy+S[1])
+    pattern.line_to(dx+0, dy-r)
+    pattern.curve_to(dx+CP1[0], dy-CP1[1], dx+CP2[0], dy-CP2[1], dx+r, dy)
+    pattern.line_to(dx+E[0], dy+E[1])
+    pattern.set_corner_color_rgba(0, primary_color[0], primary_color[1], primary_color[2], 1.0)
+    pattern.set_corner_color_rgba(1, primary_color[0], primary_color[1], primary_color[2], 1.0)
+    pattern.set_corner_color_rgba(2, primary_color[0], primary_color[1], primary_color[2], 0.75)
+    pattern.set_corner_color_rgba(3, primary_color[0], primary_color[1], primary_color[2], 0.75)
+    pattern.end_patch()
+    # BOTTOM RIGHT
+    CP1 = (r, 0.552 * r)
+    CP2 = (0.552 * r, r)
+    pattern.begin_patch()
+    pattern.move_to(dx+S[0], dy+S[1])
+    pattern.line_to(dx+r, dy+0)
+    pattern.curve_to(dx+CP1[0], dy+CP1[1], dx+CP2[0], dy+CP2[1], dx, dy+r)
+    pattern.line_to(dx+E[0], dy+E[1])
+    pattern.set_corner_color_rgba(0, primary_color[0], primary_color[1], primary_color[2], 0.75)
+    pattern.set_corner_color_rgba(1, primary_color[0], primary_color[1], primary_color[2], 0.75)
+    pattern.set_corner_color_rgba(2, primary_color[0], primary_color[1], primary_color[2], 0.25)
+    pattern.set_corner_color_rgba(3, primary_color[0], primary_color[1], primary_color[2], 0.25)
+    pattern.end_patch()
+    # BOTTOM LEFT
+    CP1 = (0.552 * r, r)
+    CP2 = (r, 0.552 * r)
+    pattern.begin_patch()
+    pattern.move_to(dx+S[0], dy+S[1])
+    pattern.line_to(dx+0, dy+r)
+    pattern.curve_to(dx-CP1[0], dy+CP1[1], dx-CP2[0], dy+CP2[1], dx-r, dy)
+    pattern.line_to(dx+E[0], dy+E[1])
+    pattern.set_corner_color_rgba(0, primary_color[0], primary_color[1], primary_color[2], 0.25)
+    pattern.set_corner_color_rgba(1, primary_color[0], primary_color[1], primary_color[2], 0.25)
+    pattern.set_corner_color_rgba(2, 0.0000, 0, 0.0000, 0.0)
+    pattern.set_corner_color_rgba(3, 0.0000, 0, 0.0000, 0.0)
+    pattern.end_patch()
+    # TOP LEFT
+    CP1 = (r, 0.552 * r)
+    CP2 = (0.552 * r, r)
+    pattern.begin_patch()
+    pattern.move_to(dx+S[0], dy+S[1])
+    pattern.line_to(dx-r, dy+0)
+    pattern.curve_to(dx-CP1[0], dy-CP1[1], dx-CP2[0], dy-CP2[1], dx, dy-r)
+    pattern.line_to(dx+E[0], dy+E[1])
+    pattern.set_corner_color_rgba(0, primary_color[0], primary_color[1], primary_color[2], 1.0)
+    pattern.set_corner_color_rgba(1, primary_color[0], primary_color[1], primary_color[2], 1.0)
+    pattern.set_corner_color_rgba(2, primary_color[0], primary_color[1], primary_color[2], 1.0)
+    pattern.set_corner_color_rgba(3, primary_color[0], primary_color[1], primary_color[2], 1.0)
+    pattern.end_patch()
+    ctx.set_source(pattern)
+    #ctx.paint()
+    ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, 1.5*math.pi, 2*math.pi+math.pi-0.20)
+    ctx.stroke()
+    ctx.restore()
+    # NZXT logo
+    logo = cairo.ImageSurface.create_from_png("NZXT-md.png")
+    ctx.save()
+    ctx.translate(WIDTH/2-logo.get_width()/2, HEIGHT/2-logo.get_height()/2)
+    ctx.set_source_surface(logo, 0, 0)
+    ctx.paint()
+    ctx.restore()
+    # return the drawn surface
+    return surface
+
+def nz_spectrum(progress):
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, WIDTH, HEIGHT)
+    ctx = cairo.Context(surface)
+    # Background
+    ctx.rectangle(0, 0, WIDTH, HEIGHT)
+    ctx.set_source_rgb(0.0, 0.0, 0.0)
+    ctx.fill()
+    # Stroke settings
+    ctx.set_line_width(GAUGE_WIDTH)
+    ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+    # progress of gradient 0-320
+    progress = progress%320 #int(progress, base=10) % 320
+    ctx.save()
+    ctx.translate(-progress, 0)
+    # Gradient background
+    pattern = cairo.LinearGradient(0, HEIGHT/2, WIDTH, HEIGHT/2)
+    pattern.add_color_stop_rgb(0.00, 1, 1, 0)
+    pattern.add_color_stop_rgb(0.25, 0, 1, 0)
+    pattern.add_color_stop_rgb(0.50, 0, 0, 1)
+    pattern.add_color_stop_rgb(0.75, 1, 0, 0)
+    pattern.add_color_stop_rgb(1.00, 1, 1, 0)
+    pattern.set_extend(cairo.Extend.REPEAT); #(cairo.Extend.REFLECT);
+    ctx.set_source(pattern)
+    #ctx.paint()
+    ctx.translate(progress, 0)
+    ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, 0, 2*math.pi)
+    ctx.stroke()
+    ctx.restore()
+    # NZXT logo
+    logo = cairo.ImageSurface.create_from_png("NZXT-md.png")
+    ctx.save()
+    ctx.translate(WIDTH/2-logo.get_width()/2, HEIGHT/2-logo.get_height()/2)
+    ctx.set_source_surface(logo, 0, 0)
+    ctx.paint()
+    ctx.restore()
+    # return the drawn surface
+    return surface
+
+def nz_colorwheel(primary, secondary, quaternary, quinary, rotation):
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, WIDTH, HEIGHT)
+    ctx = cairo.Context(surface)
+    # Background
+    ctx.rectangle(0, 0, WIDTH, HEIGHT)
+    ctx.set_source_rgb(0, 0, 0)
+    ctx.fill()
+    # Stroke settings
+    ctx.set_line_width(GAUGE_WIDTH)
+    ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+    # Add a Coons patch
+    rotation = rotation%360 #int(rotation, base=10) % 360
+    ctx.save()
+    ctx.translate(WIDTH/2, HEIGHT/2)
+    ctx.rotate(-rotation*math.pi/180.0)
+    ctx.translate(-WIDTH/2, -HEIGHT/2)
+    pattern = cairo.MeshPattern()
+    # TOP RIGHT
+    dx = WIDTH/2
+    dy = HEIGHT/2
+    r = 160
+    S = (0, 0)
+    CP1 = (0.552 * r, r)
+    CP2 = (r, 0.552 * r)
+    E = (0, 0) 
+    pattern.begin_patch()
+    pattern.move_to(dx+S[0], dy+S[1])
+    pattern.line_to(dx+0, dy-r)
+    pattern.curve_to(dx+CP1[0], dy-CP1[1], dx+CP2[0], dy-CP2[1], dx+r, dy)
+    pattern.line_to(dx+E[0], dy+E[1])
+    pattern.set_corner_color_rgb(0, primary[0], primary[1], primary[2])
+    pattern.set_corner_color_rgb(1, primary[0], primary[1], primary[2])
+    pattern.set_corner_color_rgb(2, secondary[0], secondary[1], secondary[2])
+    pattern.set_corner_color_rgb(3, secondary[0], secondary[1], secondary[2])
+    pattern.end_patch()
+    # BOTTOM RIGHT
+    CP1 = (r, 0.552 * r)
+    CP2 = (0.552 * r, r)
+    pattern.begin_patch()
+    pattern.move_to(dx+S[0], dy+S[1])
+    pattern.line_to(dx+r, dy+0)
+    pattern.curve_to(dx+CP1[0], dy+CP1[1], dx+CP2[0], dy+CP2[1], dx, dy+r)
+    pattern.line_to(dx+E[0], dy+E[1])
+    pattern.set_corner_color_rgb(0, secondary[0], secondary[1], secondary[2])
+    pattern.set_corner_color_rgb(1, secondary[0], secondary[1], secondary[2])
+    pattern.set_corner_color_rgb(2, quaternary[0], quaternary[1], quaternary[2])
+    pattern.set_corner_color_rgb(3, quaternary[0], quaternary[1], quaternary[2])
+    pattern.end_patch()
+    # BOTTOM LEFT
+    CP1 = (0.552 * r, r)
+    CP2 = (r, 0.552 * r)
+    pattern.begin_patch()
+    pattern.move_to(dx+S[0], dy+S[1])
+    pattern.line_to(dx+0, dy+r)
+    pattern.curve_to(dx-CP1[0], dy+CP1[1], dx-CP2[0], dy+CP2[1], dx-r, dy)
+    pattern.line_to(dx+E[0], dy+E[1])
+    pattern.set_corner_color_rgb(0, quaternary[0], quaternary[1], quaternary[2])
+    pattern.set_corner_color_rgb(1, quaternary[0], quaternary[1], quaternary[2])
+    pattern.set_corner_color_rgb(2, quinary[0], quinary[1], quinary[2])
+    pattern.set_corner_color_rgb(3, quinary[0], quinary[1], quinary[2])
+    pattern.end_patch()
+    # TOP LEFT
+    CP1 = (r, 0.552 * r)
+    CP2 = (0.552 * r, r)
+    pattern.begin_patch()
+    pattern.move_to(dx+S[0], dy+S[1])
+    pattern.line_to(dx-r, dy+0)
+    pattern.curve_to(dx-CP1[0], dy-CP1[1], dx-CP2[0], dy-CP2[1], dx, dy-r)
+    pattern.line_to(dx+E[0], dy+E[1])
+    pattern.set_corner_color_rgb(0, quinary[0], quinary[1], quinary[2])
+    pattern.set_corner_color_rgb(1, quinary[0], quinary[1], quinary[2])
+    pattern.set_corner_color_rgb(2, primary[0], primary[1], primary[2])
+    pattern.set_corner_color_rgb(3, primary[0], primary[1], primary[2])
+    pattern.end_patch()
+    ctx.set_source(pattern)
+    #ctx.paint()
+    ctx.arc(WIDTH/2, HEIGHT/2, (WIDTH-GAUGE_WIDTH)/2, 0, 2*math.pi)
+    ctx.stroke()
+    ctx.restore()
+    # NZXT logo
+    logo = cairo.ImageSurface.create_from_png("NZXT-md.png")
+    ctx.save()
+    ctx.translate(WIDTH/2-logo.get_width()/2, HEIGHT/2-logo.get_height()/2)
+    ctx.set_source_surface(logo, 0, 0)
+    ctx.paint()
+    ctx.restore()
+    # return the drawn surface
+    return surface
+
+def as_numpy_array(surface):
+    w = surface.get_width()
+    h = surface.get_height()
+    data = surface.get_data()
+    a = numpy.ndarray(shape=(h,w), dtype=numpy.uint32, buffer=data)
+    i = Image.frombytes("RGBA", (w,h), a, "raw", "BGRA", 0, 1)
+    return numpy.asarray(i)
+
+def add_image(writer, surface):
+    a = as_numpy_array(surface)
+    writer.append_data(a)    
+    
+if __name__ == '__main__':
+    args = docopt(__doc__, version='0.0.1')
+    surface = None
+    #print(args)
+    filename = args['<filename>']
+    if args['single']:
+        primary   = [x/255.0 for x in webcolors.hex_to_rgb(args['<primary_color>'])]
+        secondary = [x/255.0 for x in webcolors.hex_to_rgb(args['<secondary_color>'])]
+        text      = [x/255.0 for x in webcolors.hex_to_rgb(args['<text_color>'])]
+        surface = nz_single(primary, secondary, text, args['<name>'], args['<value>'], args['<unit>'])
+        gif_writer = imageio.get_writer(filename, mode='I')
+        add_image(gif_writer, surface)
+    elif args['double']:
+        primary   = [x/255.0 for x in webcolors.hex_to_rgb(args['<primary_color>'])]
+        secondary = [x/255.0 for x in webcolors.hex_to_rgb(args['<secondary_color>'])]
+        surface = nz_double(primary, secondary, args['<primary_name>'], args['<primary_value>'], args['<primary_unit>'], args['<secondary_name>'], args['<secondary_value>'], args['<secondary_unit>'])
+        gif_writer = imageio.get_writer(filename, mode='I')
+        add_image(gif_writer, surface)
+    elif args['taichi']:
+        primary   = [x/255.0 for x in webcolors.hex_to_rgb(args['<primary_color>'])]
+        secondary = [x/255.0 for x in webcolors.hex_to_rgb(args['<secondary_color>'])]
+        duration = float(args['<duration>'])
+        gif_writer = imageio.get_writer(filename, mode='I', duration=duration)
+        for x in range(0, 360, 10):
+            surface = nz_colorwheel(secondary, secondary, primary, primary, x)
+            add_image(gif_writer, surface)
+    elif args['sweep']:
+        primary   = [x/255.0 for x in webcolors.hex_to_rgb(args['<primary_color>'])]
+        duration = float(args['<duration>'])
+        gif_writer = imageio.get_writer(filename, mode='I', duration=duration)
+        for x in range(0, 360, 10):
+            surface = nz_sweep(primary, x)
+            add_image(gif_writer, surface)
+    elif args['rainbow']:
+        primary    = [x/255.0 for x in webcolors.hex_to_rgb("#ff0000")]
+        secondary  = [x/255.0 for x in webcolors.hex_to_rgb("#ffff00")]
+        quaternary = [x/255.0 for x in webcolors.hex_to_rgb("#00ff00")]
+        quinary    = [x/255.0 for x in webcolors.hex_to_rgb("#0000ff")]
+        duration = float(args['<duration>'])
+        gif_writer = imageio.get_writer(filename, mode='I', duration=duration)
+        for x in range(0, 320, 10):
+            surface = nz_colorwheel(primary, secondary, quaternary, quinary, x)
+            add_image(gif_writer, surface)
+    elif args['spectrum']:
+        duration = float(args['<duration>'])
+        gif_writer = imageio.get_writer(filename, mode='I', duration=duration)
+        for x in range(0, 320, 10):
+            surface = nz_spectrum(x)
+            add_image(gif_writer, surface)
+    elif args['colorwheel']:
+        primary    = [x/255.0 for x in webcolors.hex_to_rgb(args['<primary_color>'])]
+        secondary  = [x/255.0 for x in webcolors.hex_to_rgb(args['<secondary_color>'])]
+        quaternary = [x/255.0 for x in webcolors.hex_to_rgb(args['<quaternary_color>'])]
+        quinary    = [x/255.0 for x in webcolors.hex_to_rgb(args['<quinary_color>'])]
+        duration = float(args['<duration>'])
+        gif_writer = imageio.get_writer(filename, mode='I', duration=duration)
+        for x in range(0, 380, 10):
+            surface = nz_colorwheel(primary, secondary, quaternary, quinary, x)
+            add_image(gif_writer, surface)
+
+    

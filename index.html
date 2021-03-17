@@ -1,0 +1,54 @@
+<html>
+<head>
+<head/>
+<style>
+html {
+    background-color: #000;
+    color: #fff;
+}
+.imagegrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    grid-column-gap: 24px;
+    grid-row-gap: 24px;
+    justify-items: center;
+}
+</style>
+<body>
+<h1>nz3xt</h1>
+<h2>Python script for creating gauges and patterns suitable for nzxt z3 pumheads</h2>
+<pre>
+Usage:
+  nz3xt single     &lt;primary_color&gt; &lt;secondary_color&gt; &lt;text_color&gt; &lt;name&gt; &lt;value&gt; &lt;unit&gt; &lt;filename&gt;
+  nz3xt double     &lt;primary_color&gt; &lt;secondary_color&gt; &lt;primary_name&gt; &lt;primary_value&gt; &lt;primary_unit&gt; &lt;secondary_name&gt; &lt;secondary_value&gt;  &lt;secondary_unit&gt; &lt;filename&gt;
+  nz3xt taichi     &lt;primary_color&gt; &lt;secondary_color&gt; &lt;duration&gt; &lt;filename&gt;
+  nz3xt sweep      &lt;primary_color&gt; &lt;duration&gt; &lt;filename&gt;
+  nz3xt rainbow    &lt;duration&gt; &lt;filename&gt;
+  nz3xt spectrum   &lt;duration&gt; &lt;filename&gt;
+  nz3xt colorwheel &lt;primary_color&gt; &lt;secondary_color&gt; &lt;quaternary_color&gt; &lt;quinary_color&gt; &lt;duration&gt; &lt;filename&gt;
+</pre>
+<h2>Examples</h2>
+<div class="imagegrid"style="padding:10px">
+   <img src="./examples/single01.gif"  alt="1" width = 320px height = 320px >
+   <img src="./examples/single02.gif"  alt="2" width = 320px height = 320px >
+   <img src="./examples/double01.gif"  alt="3" width = 320px height = 320px >
+   <img src="./examples/double02.gif"  alt="4" width = 320px height = 320px >
+   <img src="./examples/sweep01.gif"  alt="5" width = 320px height = 320px >
+   <img src="./examples/taichi01.gif"  alt="6" width = 320px height = 320px >
+   <img src="./examples/colorwheel01.gif"  alt="7" width = 320px height = 320px >
+   <img src="./examples/rainbow01.gif"  alt="8" width = 320px height = 320px >
+   <img src="./examples/spectrum01.gif"  alt="9" width = 320px height = 320px >
+</div>
+<pre>
+./nz3xt single     "#5200ac" "#7d0081" "#ffffff" CPU 39 ° examples/single01.gif
+./nz3xt single     "#5200ac" "#7d0081" "#00aae4" CPU 44 % examples/single02.gif
+./nz3xt double     "#5200ac" "#7d0081" CPU 25 ° GPU 28 ° examples/double01.gif
+./nz3xt double     "#00aae4" "#ffa500" TEMP 23 ° LOAD 87 % examples/double02.gif
+./nz3xt taichi     "#00aae4" "#ffa500" 0.05  examples/taichi01.gif
+./nz3xt sweep      "#00aae4" 0.05 examples/sweep01.gif
+./nz3xt rainbow    0.05 examples/rainbow01.gif
+./nz3xt spectrum   0.05 examples/spectrum01.gif
+./nz3xt colorwheel "#00aae4" "#ffa500" "#5200ac" "#7d0081" 0.05 examples/colorwheel01.gif
+</pre>
+</html>
